@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 def create_resume(db: Session, user_id: int, filename: str, file_type: str, data: bytes, doc: dict,
                   processor: ResumeNLPProcessor) -> Resume:
     """Parse text -> structured profile, store the file safely, persist everything."""
-    profile = processor.parse(doc["text"], doc["page_count"])
+    profile = processor.parse(doc["text"], doc["page_count"], doc.get("links"))
     quality = analyze_quality(profile, doc["text"], doc["page_count"])
 
     settings = get_settings()
@@ -80,7 +80,7 @@ def resume_to_profile(resume: Resume) -> dict:
                     "confidence_type": s.confidence_type, "mentions": s.mentions,
                     "in_skills_section": s.in_skills_section} for s in resume.skills],
         "education": [{"degree": e.degree, "level": e.level, "field_of_study": e.field_of_study,
-                       "institution": e.institution, "start_year": e.start_year, "end_year": e.end_year,
+                       "institution": e.institution, "location": e.location, "start_year": e.start_year, "end_year": e.end_year,
                        "grade": e.grade} for e in resume.education],
         "experience": [{"title": e.title, "company": e.company, "location": e.location,
                         "start_date": e.start_date, "end_date": e.end_date, "duration_months": e.duration_months,

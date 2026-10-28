@@ -88,6 +88,7 @@ class Education(Base):
     level: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     field_of_study: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     institution: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    location: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     start_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     end_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     grade: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)

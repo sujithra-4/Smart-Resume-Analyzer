@@ -43,7 +43,7 @@ def validate_upload(filename: str, content_type: str | None, data: bytes, max_by
 
 
 def process_document(data: bytes, file_type: str) -> dict:
-    """Extract and clean text. Returns {"text", "page_count", "file_type"}."""
+    """Extract and clean text while preserving parser metadata such as PDF hyperlinks."""
     result = extract_pdf(data) if file_type == "pdf" else extract_docx(data)
     result["text"] = clean_text(result["text"])
     if len(result["text"].split()) < 5:

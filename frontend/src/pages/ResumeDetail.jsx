@@ -39,6 +39,7 @@ export default function ResumeDetail() {
           <dl>
             <Row label="Name" value={pi.name} /><Row label="Email" value={pi.email} /><Row label="Phone" value={pi.phone} />
             <Row label="Location" value={pi.location} /><Row label="GitHub" value={pi.github} /><Row label="LinkedIn" value={pi.linkedin} />
+            {Object.entries(pi.links || {}).filter(([key]) => !["github", "linkedin"].includes(key)).map(([key, value]) => <Row key={key} label={key} value={value} />)}
           </dl>
         </Section>
         <Section title="Resume quality" hint="Rule-based checklist, not an ATS prediction">

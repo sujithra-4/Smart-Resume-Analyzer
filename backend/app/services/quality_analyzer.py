@@ -39,7 +39,7 @@ def structure_checks(profile: dict, text: str) -> dict[str, bool]:
         "has_email": bool(pi.get("email")),
         "has_summary_or_objective": bool(profile.get("summary")),
         "has_skills_section": "skills" in sections,
-        "has_education_section": "education" in sections,
+        "has_education_section": bool(profile.get("education")) or "education" in sections,
         "has_experience_or_projects": "experience" in sections or "projects" in sections,
         "has_clear_headings": len(sections) >= 3,
         "reasonable_length": 150 <= words <= 900,
@@ -73,7 +73,7 @@ def analyze_quality(profile: dict, text: str, page_count: int = 1,
         issues.append(_issue("missing_skills_section", "high", 10, "No dedicated Skills section was found."))
     elif not profile.get("skills"):
         issues.append(_issue("no_skills_detected", "high", 10, "No known skills were detected in the resume."))
-    if "education" not in sections:
+    if "education" not in sections and not profile.get("education"):
         issues.append(_issue("missing_education", "high", 10, "No Education section was found."))
     if "experience" not in sections and "projects" not in sections:
         issues.append(_issue("missing_experience_projects", "high", 15,

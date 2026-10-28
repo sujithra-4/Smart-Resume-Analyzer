@@ -4,7 +4,7 @@ from app.core.exceptions import CorruptedDocumentError, EmptyDocumentError, File
 from app.services.docx_parser import extract_docx
 from app.services.document_processor import process_document, validate_upload
 from app.services.pdf_parser import extract_pdf
-from tests.helpers import make_blank_pdf_bytes, make_docx_bytes, make_pdf_bytes, read_sample
+from tests.helpers import make_blank_pdf_bytes, make_docx_bytes, make_link_pdf_bytes, make_pdf_bytes, read_sample
 
 RESUME = read_sample("resume_priya_raman.txt")
 
@@ -19,6 +19,17 @@ def test_pdf_extraction_returns_text_pages_and_type():
 def test_pdf_multi_page_count():
     long_text = "\n".join(f"Line {i} of a long fictional resume" for i in range(120))
     assert extract_pdf(make_pdf_bytes(long_text))["page_count"] >= 2
+
+
+def test_pdf_hyperlink_annotations_keep_labels_and_targets(processor):
+    doc = extract_pdf(make_link_pdf_bytes())
+    assert {link["url"] for link in doc["links"]} >= {
+        "https://www.linkedin.com/in/test-person", "https://github.com/test-person"
+    }
+    profile = processor.parse(doc["text"], doc["page_count"], doc["links"])
+    assert profile["personal_information"]["linkedin"] == "https://www.linkedin.com/in/test-person"
+    assert profile["personal_information"]["github"] == "https://github.com/test-person"
+    assert profile["personal_information"]["links"]["portfolio"] == "https://example.dev/test-person"
 
 
 def test_pdf_without_text_is_rejected_as_empty():

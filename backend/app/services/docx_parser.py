@@ -4,7 +4,7 @@ import logging
 
 from docx import Document
 
-from app.core.exceptions import CorruptedDocumentError, EmptyDocumentError
+from app.core.exceptions import CorruptedDocumentError, EmptyDocumentError, format_safe_traceback
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ def extract_docx(data: bytes) -> dict:
     try:
         doc = Document(io.BytesIO(data))
     except Exception as exc:
-        logger.warning("DOCX could not be opened: %s", exc.__class__.__name__)
+        logger.warning("DOCX could not be opened:\n%s", format_safe_traceback(exc))
         raise CorruptedDocumentError("The DOCX file could not be read. It may be corrupted.") from exc
 
     parts: list[str] = [p.text for p in doc.paragraphs]

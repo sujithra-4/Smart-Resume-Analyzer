@@ -15,6 +15,10 @@ def test_heading_variants():
     assert heading_to_section("TECHNICAL SKILLS") == "skills"
     assert heading_to_section("Work Experience:") == "experience"
     assert heading_to_section("Awards & Achievements") == "achievements"
+    assert heading_to_section("  • EDUCATION PROFILE: ") == "education"
+    assert heading_to_section("ACADEMIC DETAILS") == "education"
+    assert heading_to_section("CERTIFICATIONS & ACHIEVEMENTS") == "certifications"
+    assert heading_to_section("EXTRA-CURRICULAR ACTIVITIES") == "achievements"
     assert heading_to_section("I have skills in many things and more") is None
 
 
@@ -42,6 +46,29 @@ def test_education_entry(processor):
     assert edu[0]["institution"] == "Example Institute of Technology"
     assert (edu[0]["start_year"], edu[0]["end_year"]) == (2022, 2026)
     assert edu[0]["grade"] == "8.7/10"
+
+
+def test_multiline_education_and_combined_certifications_achievements(processor):
+    text = """EDUCATION PROFILE
+Bachelor of Technology
+in Computer Science
+Example College, Chennai, Tamil Nadu | 2020 - 2024 | CGPA: 8.4/10
+Higher Secondary Certificate | Example School | 2018 - 2020 | 92%
+Secondary School Leaving Certificate | Example School | 2018 | Percentage: 95%
+CERTIFICATIONS & ACHIEVEMENTS
+- Python for Data Science - Coursera - 2024
+- Cloud Fundamentals - Microsoft - 2023
+- Participated in HackFest 2024
+EXTRA-CURRICULAR ACTIVITIES
+- Won gold medal in inter-college badminton tournament
+"""
+    profile = processor.parse(text)
+    assert len(profile["education"]) == 3
+    assert profile["education"][0]["level"] == "bachelor"
+    assert profile["education"][0]["grade"] == "8.4/10"
+    assert {c["issuer"] for c in profile["certifications"]} >= {"Coursera", "Microsoft"}
+    assert any("HackFest" in item for item in profile["achievements"])
+    assert any("badminton" in item for item in profile["achievements"])
 
 
 def test_experience_entry(processor):

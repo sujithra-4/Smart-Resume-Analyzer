@@ -1,6 +1,9 @@
+import logging
 from pathlib import Path
 
 import pytest
+from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy.orm import Session
 
 from tests.helpers import make_blank_pdf_bytes, make_docx_bytes, make_pdf_bytes, read_sample
 
@@ -97,6 +100,40 @@ def test_failed_upload_leaves_no_files_or_rows(auth_client):
     assert upload(auth_client, b"not a pdf", "resume.pdf").status_code == 422
     after = set(os.listdir(d)) if os.path.isdir(d) else set()
     assert before == after  # rejected files are never written to disk
+    assert auth_client.get("/api/resumes").json() == []
+
+
+@pytest.mark.parametrize(("error_type", "status", "detail"), [
+    (OperationalError, 503, "Database is unavailable. Please try again later."),
+    (ProgrammingError, 500, "A database error occurred."),
+])
+def test_database_failure_rolls_back_and_removes_uploaded_file(
+    auth_client, monkeypatch, caplog, error_type, status, detail
+):
+    import os
+
+    upload_dir = os.environ["UPLOAD_DIR"]
+    before = set(os.listdir(upload_dir)) if os.path.isdir(upload_dir) else set()
+
+    def fail_commit(_session):
+        raise error_type(
+            "INSERT INTO resumes",
+            {"raw_text": "private resume contents"},
+            RuntimeError("private database details"),
+        )
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Session, "commit", fail_commit)
+        with caplog.at_level(logging.ERROR, logger="app.core.exceptions"):
+            response = upload(auth_client, make_pdf_bytes(RESUME))
+
+    assert response.status_code == status
+    assert response.json() == {"detail": detail}
+    assert f"{error_type.__name__} traceback:" in caplog.text
+    assert "private resume contents" not in caplog.text
+    assert "private database details" not in caplog.text
+    after = set(os.listdir(upload_dir)) if os.path.isdir(upload_dir) else set()
+    assert before == after
     assert auth_client.get("/api/resumes").json() == []
 
 

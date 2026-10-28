@@ -14,6 +14,7 @@ from collections import Counter
 from datetime import date
 from functools import lru_cache
 from typing import Optional
+from urllib.parse import urlparse
 
 import spacy
 
@@ -82,7 +83,7 @@ _DEGREE_PATTERNS = [
     (re.compile(r"\bB\.E\b\.?|\bBE\b(?=\s+(?:in|\(|-|,)|\s*$)|\bBCA\b|\bBBA\b"), 2),
     (re.compile(r"\bB\.?\s?Tech\b|\bB\.?\s?Sc\b|\bBachelors?(?:'s)?\b", re.I), 2),
     (re.compile(r"\bDiploma\b|\bPolytechnic\b", re.I), 1),
-    (re.compile(r"\bHSC\b|\bSSLC\b|\bSSC\b|\bHigher Secondary\b|\b12th\b|\b10th\b|\bClass (?:X|XII)\b|\bIntermediate\b"), 0),
+    (re.compile(r"\bHSC\b|\bSSLC\b|\bSSC\b|\bHigher Secondary(?: Certificate)?\b|\bSecondary School Leaving Certificate\b|\b12th\b|\b10th\b|\bClass (?:X|XII)\b|\bIntermediate\b", re.I), 0),
 ]
 LEVEL_NAMES = {0: "school", 1: "diploma", 2: "bachelor", 3: "master", 4: "phd"}
 
@@ -154,7 +155,7 @@ class ResumeNLPProcessor:
         self.extractor = extractor or get_skill_extractor()
 
     # ------------------------------------------------------------------ public API
-    def parse(self, text: str, page_count: int = 1) -> dict:
+    def parse(self, text: str, page_count: int = 1, links: Optional[list[dict[str, str]]] = None) -> dict:
         sec: SectionResult = detect_sections(text)
         doc = self.nlp(text)
 
@@ -166,14 +167,14 @@ class ResumeNLPProcessor:
         intervals = [iv for e in experience if (iv := duration_months(e["start_date"] or "", e["end_date"] or ""))
                      ] if experience else []
         profile = {
-            "personal_information": self._personal_information(text, sec),
+            "personal_information": self._personal_information(text, sec, links or []),
             "summary": sec.sections.get("summary") or sec.sections.get("objective", ""),
             "skills": skills,
             "education": self._parse_education(sec.sections.get("education", "")),
             "experience": experience,
             "projects": self._parse_projects(sec.sections.get("projects", "")),
             "certifications": self._parse_certifications(sec.sections.get("certifications", "")),
-            "achievements": [strip_bullet(l) for l in sec.sections.get("achievements", "").split("\n") if l.strip()],
+            "achievements": self._parse_achievements(sec.sections.get("achievements", "")),
             "publications": [strip_bullet(l) for l in sec.sections.get("publications", "").split("\n") if l.strip()],
             "organizations": organizations,
             "sections": sec.sections,
@@ -191,7 +192,7 @@ class ResumeNLPProcessor:
         return profile
 
     # ------------------------------------------------------------ personal details
-    def _personal_information(self, text: str, sec: SectionResult) -> dict:
+    def _personal_information(self, text: str, sec: SectionResult, links: list[dict[str, str]]) -> dict:
         header = sec.header or "\n".join(text.split("\n")[:6])
         header_lines = [l.strip() for l in header.split("\n") if l.strip()][:8]
         header_text = "\n".join(header_lines)
@@ -201,6 +202,7 @@ class ResumeNLPProcessor:
                       if 10 <= len(re.sub(r"\D", "", m.group(1))) <= 13), None)
         linkedin = LINKEDIN_RE.search(text)
         github = GITHUB_RE.search(text)
+        link_map = self._profile_links(links)
 
         # NER runs per line: an entity must never span a line break (name + city on separate lines).
         segments = [
@@ -220,9 +222,31 @@ class ResumeNLPProcessor:
             "email": email.group(0) if email else None,
             "phone": phone,
             "location": location,
-            "linkedin": linkedin.group(0) if linkedin else None,
-            "github": github.group(0) if github else None,
+            "linkedin": link_map.get("linkedin") or (self._normalise_url(linkedin.group(0)) if linkedin else None),
+            "github": link_map.get("github") or (self._normalise_url(github.group(0)) if github else None),
+            "links": link_map,
         }
+
+    @staticmethod
+    def _normalise_url(value: str) -> Optional[str]:
+        value = (value or "").strip().rstrip(".,;)")
+        candidate = value if re.match(r"https?://", value, re.I) else f"https://{value}"
+        parsed = urlparse(candidate)
+        return candidate if parsed.scheme in {"http", "https"} and parsed.netloc else None
+
+    def _profile_links(self, links: list[dict[str, str]]) -> dict[str, str]:
+        """Map PDF annotation labels/hosts to known profile links; never infer a target."""
+        profiles: dict[str, str] = {}
+        for link in links:
+            url = self._normalise_url(link.get("url", ""))
+            if not url:
+                continue
+            hint = f"{link.get('label', '')} {url}".lower()
+            for key, marker in (("linkedin", "linkedin.com/in/"), ("github", "github.com/"),
+                                ("hackerrank", "hackerrank"), ("leetcode", "leetcode"), ("portfolio", "portfolio")):
+                if marker in hint or key in hint:
+                    profiles.setdefault(key, url)
+        return profiles
 
     def _location_pattern(self, segments: list[str]) -> Optional[str]:
         """Fallback when NER finds no GPE: the small spaCy model often mis-tags short place names
@@ -324,6 +348,12 @@ class ResumeNLPProcessor:
         if not institution:
             org = next((e.text for e in self.nlp(text).ents if e.label_ == "ORG"), None)
             institution = org
+        location = None
+        for line in block:
+            m = re.search(r"(?:\||,| - )\s*([A-Z][A-Za-z .'-]+,\s*[A-Z][A-Za-z .'-]+)\s*$", line)
+            if m:
+                location = m.group(1).strip()
+                break
         years = [int(m.group(0)) for m in YEAR_RE.finditer(text)]
         grade_m = re.search(r"(?:CGPA|GPA|Percentage|Grade)\s*[:\-]?\s*([0-9]+(?:\.[0-9]+)?\s*(?:/\s*\d+(?:\.\d+)?|%)?)", text, re.I)
         if not grade_m:
@@ -333,6 +363,7 @@ class ResumeNLPProcessor:
             "level": level,
             "field_of_study": field,
             "institution": institution,
+            "location": location,
             "start_year": min(years) if len(years) > 1 else None,
             "end_year": max(years) if years else None,
             "grade": re.sub(r"\s+", "", grade_m.group(1)) if grade_m else None,
@@ -436,6 +467,8 @@ class ResumeNLPProcessor:
             line = strip_bullet(raw)
             if len(line) < 4:
                 continue
+            if self._is_achievement(line):
+                continue
             years = [int(m.group(0)) for m in YEAR_RE.finditer(line)]
             issuer = next((i for i in ISSUERS if re.search(rf"\b{re.escape(i)}\b", line, re.I)), None)
             parts = [p.strip() for p in _SEP_RE.split(line) if p.strip()]
@@ -445,3 +478,11 @@ class ResumeNLPProcessor:
                 name = max(non_meta, key=len) if non_meta else line
             certs.append({"name": name.strip()[:255], "issuer": issuer, "year": max(years) if years else None})
         return certs
+
+    @staticmethod
+    def _is_achievement(line: str) -> bool:
+        return bool(re.search(r"\b(hackathon|hackfest|winner|finalist|runner[- ]?up|award|medal|placed|ranked|champion|participat(?:ed|ion)|competition|tournament|sports?)\b", line, re.I))
+
+    def _parse_achievements(self, section: str) -> list[str]:
+        return [strip_bullet(line) for line in section.split("\n")
+                if line.strip() and self._is_achievement(strip_bullet(line))]

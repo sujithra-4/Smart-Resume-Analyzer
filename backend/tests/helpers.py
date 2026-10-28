@@ -53,6 +53,24 @@ def make_pdf_bytes(text: str) -> bytes:
     return data
 
 
+def make_link_pdf_bytes() -> bytes:
+    """Small PDF whose visible labels intentionally differ from URI targets."""
+    doc = pymupdf.open()
+    page = doc.new_page()
+    labels = [("LinkedIn", "https://www.linkedin.com/in/test-person"),
+              ("GitHub", "https://github.com/test-person"),
+              ("Portfolio", "https://example.dev/test-person")]
+    y = 60
+    for label, target in labels:
+        page.insert_text((50, y), label, fontsize=11)
+        page.insert_link({"kind": pymupdf.LINK_URI, "from": pymupdf.Rect(50, y - 12, 120, y + 3), "uri": target})
+        y += 20
+    page.insert_text((50, y), "github.com/plain-text-profile", fontsize=11)
+    data = doc.tobytes()
+    doc.close()
+    return data
+
+
 def make_blank_pdf_bytes() -> bytes:
     doc = pymupdf.open()
     doc.new_page()

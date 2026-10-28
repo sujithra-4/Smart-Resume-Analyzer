@@ -20,6 +20,7 @@ class EducationOut(BaseModel):
     level: Optional[str] = None
     field_of_study: Optional[str] = None
     institution: Optional[str] = None
+    location: Optional[str] = None
     start_year: Optional[int] = None
     end_year: Optional[int] = None
     grade: Optional[str] = None

@@ -244,36 +244,3 @@ magic bytes, size, server-generated storage names, no paths in responses); CORS 
 data isolation; generic auth errors with equalised timing; clean error responses. The token is kept in `localStorage`
 (trade-off explained in `frontend/src/hooks/useAuth.jsx`); httpOnly cookies are a stronger production option.
 
-## Known limitations
-- Scanned/image PDFs are rejected (OCR not implemented). DOCX page count is estimated from word count.
-- Skills outside the dictionary are not detected (extend `skills_data.py` or `CUSTOM_SKILLS_PATH`).
-- Experience duration needs dates; year-only dates are approximated.
-- `en_core_web_sm` is small; use `en_core_web_md/lg` (set `SPACY_MODEL_NAME`) for better NER.
-- Verified in development with SQLite-backed tests. Run `docker compose up --build` once on your machine to confirm the
-  PostgreSQL and Docker path in your environment.
-
-## AI Engineer interview questions
-1. **What does the project do end to end?** Parses a resume, extracts structure and skills with spaCy, embeds resume and job with MiniLM, computes cosine similarity, matches skills, analyses gaps and quality, and generates explained recommendations plus a weighted score.
-2. **Why combine skill dictionaries with embeddings?** Dictionaries are precise and explainable but miss paraphrases; embeddings capture meaning but are opaque. Together they give a score and a reason.
-3. **Why all-MiniLM-L6-v2?** Small (about 90 MB), fast on CPU, 384-d vectors, good general semantic similarity, free and local. Trade-off: a 256-token limit and weaker domain nuance than larger models.
-4. **How do you handle the 256-token limit?** Overlapping 180-word chunks are embedded and mean-pooled, then re-normalised, so the end of a long resume is not silently dropped.
-5. **What is cosine similarity and why use it?** The cosine of the angle between vectors; it ignores magnitude and works well for normalised sentence embeddings. With unit vectors it is just a dot product.
-6. **Why is 0.82 similarity not an 82% chance of being hired?** Cosine similarity measures textual closeness, not calibrated outcome probability. There is no hiring-outcome data, so any probability claim would be fabricated.
-7. **How is the overall score computed, and why those weights?** 40/30/15/10/5 across skills, semantics, experience, education and structure. The weights are a documented design choice, not learned; with labelled hiring data you could fit them, which would also need fairness analysis.
-8. **How do you avoid loading the model per request?** A lazy thread-safe singleton (`EmbeddingService`); optional preload at startup; vectors cached in the database.
-9. **How does skill extraction work and what are its failure modes?** spaCy `PhraseMatcher` over a normalised dictionary. It misses unknown skills and can mis-fire on ambiguous words, handled with case-sensitive aliases and a TF-IDF/TF guard.
-10. **Is the skill confidence a probability?** No. It is a labelled heuristic from section location and evidence; the API says `confidence_type: "heuristic"`.
-11. **Why spaCy NER if you also use rules?** NER handles names, places and organisations that rules cannot enumerate; rules cover structured fields. The small model has errors, so there are fallbacks and filters.
-12. **How do you decide critical vs important vs optional gaps?** Only from the job text: required sections or "must" clauses, preferred cues, responsibilities, or other mentions. Priorities are never invented.
-13. **How do you keep recommendations from hallucinating?** They are template-based from concrete findings, conditional in wording, and each carries a reason. No generative model is involved.
-14. **How would you evaluate the system?** Precision/recall/F1 for skill extraction and matching, and ranking metrics for semantic matching on a labelled set. The current set is tiny and author-written, so I would add real annotated data and report agreement.
-15. **What are the evaluation weaknesses?** Small sample, same author for dictionary and labels (optimistic), no calibration, no out-of-vocabulary analysis.
-16. **How would you detect and mitigate bias?** Do not score protected attributes, audit score differences across resume variants that differ only in name or gender cues, keep a human in the loop, and avoid automated screening use.
-17. **How is requirement coverage computed?** Each job requirement line is embedded and compared with every resume line; the best cosine is reported with the matching line and a tunable threshold (0.45).
-18. **How is authentication secured?** bcrypt with SHA-256 pre-hash, JWT with expiry, generic login errors with dummy-hash timing equalisation, secrets from the environment, per-user data filters.
-19. **How are uploads secured?** Extension + MIME + magic-byte checks, size limits read in chunks, server-generated filenames, path-traversal guard, files removed if the DB write fails.
-20. **Why Alembic and PostgreSQL?** Versioned, repeatable schema changes and a production-grade relational database; JSON columns store flexible analysis details while core entities stay relational.
-21. **How would you scale this?** Move embedding to a worker queue, store files in object storage, use pgvector or a vector index for search, cache embeddings, and run multiple API replicas behind a load balancer.
-22. **How would you add Azure?** Document Intelligence for OCR/layout, Blob Storage for files, Azure AI Search for vector search, Azure OpenAI for a grounded assistant, Container Apps for hosting.
-23. **How did you test code that needs a heavy model?** Dependency injection: tests supply a deterministic encoder to verify the maths and API flow, and one opt-in test runs the real model.
-24. **What would you improve next?** OCR, a skill ontology, a larger evaluation set, a cross-encoder re-ranker, and score calibration against real outcomes if consented data existed.

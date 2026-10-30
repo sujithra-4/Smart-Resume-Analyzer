@@ -206,9 +206,6 @@ calculation, authentication, upload validation (invalid, empty, unsupported, ove
 and all endpoints. API tests inject a small deterministic bag-of-words encoder so the suite runs offline; the transformer
 itself is exercised only by the opt-in test above.
 
-## Screenshots
-Add images to `docs/` and link them here.
-
 | Page | Screenshot |
 |------|-----------|
 | Dashboard | `docs/dashboard.png` *(placeholder)* |
@@ -219,15 +216,6 @@ Add images to `docs/` and link them here.
 - Azure AI services (see next section), OCR for scanned PDFs, RAG over job postings, a GenAI career assistant
   (grounded in the extracted profile, never inventing experience), Azure deployment, larger evaluation sets with
   inter-annotator agreement, a skill ontology (ESCO / O*NET) instead of a hand-written dictionary.
-
-## Optional Azure extension (not required)
-The project runs fully without Azure. With AI-900 / AI-102 knowledge you could later add:
-- **Azure AI Document Intelligence** for scanned/complex layouts (replaces the PyMuPDF step; the rest of the pipeline is unchanged)
-- **Azure Blob Storage** for resume files instead of local disk
-- **Azure AI Search** (vector + keyword hybrid) to search many resumes or jobs
-- **Azure Database for PostgreSQL** instead of the Compose container
-- **Azure Container Apps / App Service** to host the two containers
-- **Microsoft Foundry / Azure OpenAI** for a grounded career assistant on top of the structured profile
 
 ## Responsible AI
 - The match score is a similarity measure, **not** hiring probability.
